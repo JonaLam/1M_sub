@@ -4,7 +4,7 @@ var card_scene: PackedScene = preload("res://Cards/Card.tscn")
 
 var discard_pile: Array[CardBase] = CardManager.card_container.discard_pile
 var draw_pile: Array[CardBase] = CardManager.card_container.draw_pile
-var deck_pile: Array[CardBase]  = CardManager.card_container.default_deck
+var deck_pile: Array[CardBase]  = CardManager.current_deck
 var cards_to_display: Array[CardBase] = []
 var card_worlds: Array[CardWorld] = []
 var cardworld: CardWorld = null
@@ -23,7 +23,7 @@ func _on_button_pressed() -> void:
 
 #deletes the root node CardScrollUI with the escape key
 func _input(_inputevent: InputEvent) -> void:
-	if Input.is_key_pressed(KEY_ESCAPE):
+	if (_inputevent.is_action_pressed("cancel_action")):
 		queue_free()
 
 

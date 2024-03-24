@@ -1,10 +1,10 @@
 [gd_scene load_steps=8 format=3 uid="uid://caxbd2ppk3ans"]
 
 [ext_resource type="Script" path="res://Cards/CardWorld.gd" id="1_4el5m"]
-[ext_resource type="Texture2D" uid="uid://nheutko3fha3" path="res://Cards/card.png" id="2_k6rq5"]
+[ext_resource type="Texture2D" uid="uid://nheutko3fha3" path="res://Art/Card_layout/card_border.png" id="2_k6rq5"]
 [ext_resource type="Script" path="res://Input/ClickHandler.gd" id="3_du4nn"]
 [ext_resource type="Script" path="res://UI/CardUISetter.gd" id="5_hkyxd"]
-[ext_resource type="Texture2D" uid="uid://bdc5r0w6lyh34" path="res://Cards/card_image.png" id="6_p357x"]
+[ext_resource type="Texture2D" uid="uid://bdc5r0w6lyh34" path="res://Art/Card_art/default_art.png" id="6_p357x"]
 [ext_resource type="Script" path="res://Cards/CardMovementComponent.gd" id="6_qvt2l"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_ooxvf"]
@@ -17,11 +17,12 @@ script = ExtResource("1_4el5m")
 
 [node name="ClickHandler" type="Node" parent="."]
 script = ExtResource("3_du4nn")
+time_to_lock_hover = 0.3
 
 [node name="CardMovementComponent" type="Node" parent="."]
 script = ExtResource("6_qvt2l")
 
-[node name="CardUI" type="Control" parent="." node_paths=PackedStringArray("title_label", "description_label", "key_art")]
+[node name="CardUI" type="Control" parent="." node_paths=PackedStringArray("title_label", "description_label", "energy_label", "key_art")]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -38,6 +39,7 @@ mouse_filter = 2
 script = ExtResource("5_hkyxd")
 title_label = NodePath("VerticalLayout/Title")
 description_label = NodePath("VerticalLayout/Description")
+energy_label = NodePath("Energy")
 key_art = NodePath("VerticalLayout/KeyArt")
 
 [node name="SelectionButton" type="TextureButton" parent="CardUI"]
@@ -85,6 +87,13 @@ label_settings = SubResource("LabelSettings_ooxvf")
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
+
+[node name="Energy" type="Label" parent="CardUI"]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 27.0
+offset_right = 44.0
+offset_bottom = 50.0
 
 [connection signal="gui_input" from="CardUI/SelectionButton" to="ClickHandler" method="_on_gui_input_event"]
 [connection signal="mouse_entered" from="CardUI/SelectionButton" to="ClickHandler" method="_on_mouse_entered"]

@@ -10,12 +10,12 @@ class_name CardContainer
 
 signal on_card_counts_updated
 signal on_cards_finished_dealing
+signal on_finished_discarding_hand
 
 @export var card_scene: PackedScene
 @export var total_hand_width: float = 100
 @export var card_hovered_offset: float = 100
 @export var card_queued_offset: float = 100
-@export var default_deck: Array[CardBase]
 @export var starting_hand_size: int = 5
 @export var max_hand_size: int = 10
 @export var card_draw_time: float = 0.2
@@ -30,52 +30,73 @@ signal on_cards_finished_dealing
 @export var max_hand_offset_y: float = 100
 @export var draw_pile_ui: DrawPileUISetter = null
 @export var discard_pile_ui: DiscardPileUISetter = null
+# Height at where cards gets played
+@export var play_at_height : float 
+
 
 var cards_in_hand: Array[CardWorld] = []
 var draw_pile: Array[CardBase] = []
 var discard_pile: Array[CardBase] = []
 var queued_card: CardWorld = null
 
-var _active_card: CardBase = null
+var _active_card: CardWorld = null
 var _focused_card: CardWorld = null
 var _cards_queued_for_add: Array[CardBase] = []
 var _draw_timer: SceneTreeTimer = null
 var _cards_queued_for_discard: Array[CardWorld] = []
 var _discard_timer: SceneTreeTimer = null
 
-
 func _ready() -> void:
 	PhaseManager.on_phase_changed.connect(_on_phase_changed)
+	CardManager.on_deck_initialized.connect(_init_default_draw_pile)
 	CardManager.set_card_container(self)
-	CardManager.on_card_action_finished.connect(remove_active_card)
-	
-	_init_default_draw_pile()
+	CardManager.on_card_action_finished.connect(finish_active_card_action.unbind(1))
+	# ? all calls functions connected to on_card_action_finished don't even use the data of the card passed with the signal
+	# ? does the signal even need to pass the card data since no function connected uses it ?
 
 
 func _process(_delta: float) -> void:
 	_update_card_positions()
+	_handle_queued_card()
 
 
 func set_queued_card(card: CardWorld) -> void:
 	queued_card = card
 
 
-func remove_queued_card() -> void:
+
+# Remove card from focused and queued and remove it from the hand to prepare it to be played
+func queued_for_active() -> void:
 	_focused_card = null
-	discard_card(queued_card)
-	set_queued_card(null)
+	_remove_queued_card_from_hand()
+
+
+func _remove_queued_card_from_hand() -> void:
+	var _index_to_remove: int = cards_in_hand.find(queued_card)
+	cards_in_hand.remove_at(_index_to_remove)
 
 
 func is_card_queued() -> bool:
 	return queued_card != null
 
 
-func set_active_card(card: CardBase) -> void:
+func set_active_card(card: CardWorld) -> void:
 	_active_card = card
 
 
-func remove_active_card(card: CardBase) -> void:
+func finish_active_card_action() -> void:
+	_discard_active_card()
 	_active_card = null
+
+
+func _discard_active_card() -> void:
+	if (_active_card != null):
+		# Add active_card to discard queued to trigger the discard animation
+		_add_to_discard_queue(_active_card)
+		
+		# Add to the discard pile to update the counter
+		discard_pile.append(_active_card.card_data)
+		on_card_counts_updated.emit()
 
 
 func are_cards_active() -> bool:
@@ -131,7 +152,7 @@ func get_discard_pile_size() -> int:
 
 
 func _init_default_draw_pile() -> void:
-	draw_pile = default_deck.duplicate()
+	draw_pile = CardManager.current_deck.duplicate()
 	draw_pile.shuffle()
 
 
@@ -162,7 +183,6 @@ func _discard_card_at_index(card_index: int) -> void:
 	
 	# add to discard pile
 	discard_pile.append(card.card_data)
-	
 	# remove from hand and add to discard queue
 	cards_in_hand.remove_at(card_index)
 	_add_to_discard_queue(card)
@@ -219,15 +239,15 @@ func _create_card_in_world(card_data: CardBase) -> void:
 	_update_card_positions()
 	
 	var card_movement: CardMovementComponent = card.get_card_movement_component()
-	card_movement.set_movement_state(Enums.CardMovementState.MOVING_TO_HAND)
+	card_movement.set_movement_state(GlobalEnums.CardMovementState.MOVING_TO_HAND)
 	
 	# Wait for card to finish moving, then bind input
 	card_movement.on_movement_state_update.connect(_on_card_change_state.bind(card))
 
 
-func _on_card_change_state(new_state: Enums.CardMovementState, card: CardWorld) -> void:
+func _on_card_change_state(new_state: GlobalEnums.CardMovementState, card: CardWorld) -> void:
 	# once we enter IN_HAND state, bind input
-	if new_state == Enums.CardMovementState.IN_HAND:
+	if new_state == GlobalEnums.CardMovementState.IN_HAND:
 		_bind_card_input(card)
 		
 		# unbind movement signal so it doesn't keep firing for every state
@@ -264,7 +284,7 @@ func _handle_discard_queue() -> void:
 	var movement: CardMovementComponent = card.get_card_movement_component()
 	if discard_pile_ui:
 		movement.state_properties.desired_position = discard_pile_ui.global_position
-	movement.set_movement_state(Enums.CardMovementState.DISCARDING)
+	movement.set_movement_state(GlobalEnums.CardMovementState.DISCARDING)
 	
 	# Wait for timer to expire before discarding another card
 	_discard_timer = get_tree().create_timer(card_discard_time)
@@ -273,47 +293,65 @@ func _handle_discard_queue() -> void:
 	
 	if _cards_queued_for_discard.size() > 0:
 		_handle_discard_queue()
+	elif PhaseManager.current_phase == GlobalEnums.Phase.PLAYER_FINISHING:
+		on_finished_discarding_hand.emit()
 
 
-func _on_phase_changed(new_phase: Enums.Phase, _old_phase: Enums.Phase) -> void:
-	if new_phase == Enums.Phase.PLAYER_ATTACKING:
+func _on_phase_changed(new_phase: GlobalEnums.Phase, _old_phase: GlobalEnums.Phase) -> void:
+	if new_phase == GlobalEnums.Phase.PLAYER_ATTACKING:
 		deal_to_starting_hand_size()
-	if new_phase == Enums.Phase.ENEMY_ATTACKING:
-		discard_all_cards()
+	if new_phase == GlobalEnums.Phase.PLAYER_FINISHING:
+		if (cards_in_hand.size() == 0):
+			on_finished_discarding_hand.emit()
+		else:
+			discard_all_cards()
 
 
 func _on_card_clicked(card: CardWorld) -> void:
 	if is_card_queued():
-		var previously_queued_card: CardWorld = queued_card
-		
-		# If we click ANY card while we have one queued, unqueue the queued card
-		set_queued_card(null)
-		
-		# If the card we clicked was the global queued card, we are still hovering it
-		if card == previously_queued_card:
-			_on_card_hovering(card)
+		if(queued_card.card_cast_type == GlobalEnums.CardCastType.INSTA_CAST && is_queued_card_in_play_area()):
+			play_card()
 		else:
-			# If we clicked another card, then we already unhovered the queued card
-			_on_card_unhovered(previously_queued_card)
-			# Now call this function again for the card we clicked, which should queue it
-			_on_card_clicked(card)
+		
+			var previously_queued_card: CardWorld = queued_card
+		
+			# If we click ANY card while we have one queued, unqueue the queued card
+			set_queued_card(null)
+		
+			# If the card we clicked was the global queued card, we are still hovering it
+			if card == previously_queued_card:
+				_on_card_hovering(card)
+			else:
+				# If we clicked another card, then we already unhovered the queued card
+				_on_card_unhovered(previously_queued_card)
+				# Now call this function again for the card we clicked, which should queue it
+				_on_card_clicked(card)
 	else:
 		# If we click a card with no card queued, queue it
-		set_queued_card(card)
+		if PlayerManager.player.get_energy_component().is_playable(card):
+			set_queued_card(card)
 
-		card.get_card_movement_component().set_movement_state(Enums.CardMovementState.QUEUED)
-		_focus_card(card)
+			card.get_card_movement_component().set_movement_state(GlobalEnums.CardMovementState.QUEUED)
+			_focus_card(card)
+		else:
+			set_queued_card(null)
 
+func play_card(target : Entity = null) -> void:
+	queued_for_active()
+	set_active_card(queued_card)
+	set_queued_card(null)
+	_active_card.card_data.on_card_play(PlayerManager.player, target)
+	
 
 func _on_card_hovering(card: CardWorld) -> void:
 	if !is_card_queued():
-		card.get_card_movement_component().set_movement_state(Enums.CardMovementState.HOVERED)
+		card.get_card_movement_component().set_movement_state(GlobalEnums.CardMovementState.HOVERED)
 		_focus_card(card)
 
 
 func _on_card_unhovered(card: CardWorld) -> void:
 	if !is_card_queued():
-		card.get_card_movement_component().set_movement_state(Enums.CardMovementState.IN_HAND)
+		card.get_card_movement_component().set_movement_state(GlobalEnums.CardMovementState.IN_HAND)
 		_unfocus_card(card)
 
 
@@ -359,7 +397,6 @@ func _update_card_positions() -> void:
 	for card_index: int in amount_of_cards:
 		var card: CardWorld = cards_in_hand[card_index]
 		var movement_component: CardMovementComponent = card.get_card_movement_component()
-		var move_state: Enums.CardMovementState = movement_component.current_move_state
 		
 		var card_x: float = per_card_separation * card_index
 		var card_y: float = 0.0
@@ -393,3 +430,20 @@ func _update_card_positions() -> void:
 		# set position and rotation
 		movement_component.state_properties.desired_position = Vector2(card_x, card_y)
 		movement_component.state_properties.desired_rotation = rotation_amount
+
+func un_queue_card(card : CardWorld) -> void:
+	set_queued_card(null)
+	_unfocus_card(card)
+	card.get_card_movement_component().set_movement_state(GlobalEnums.CardMovementState.IN_HAND)
+
+func is_queued_card_in_play_area() -> bool:
+	return get_global_mouse_position().y < play_at_height 
+
+func _handle_queued_card() -> void:
+	if(queued_card == null):
+		return
+		
+	#check if right button is pressed
+	if(Input.is_action_just_pressed("cancel_queued_card_in_battle")):
+		un_queue_card(queued_card)
+	pass

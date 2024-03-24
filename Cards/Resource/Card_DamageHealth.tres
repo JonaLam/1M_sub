@@ -1,20 +1,31 @@
-[gd_resource type="Resource" script_class="Card_DamageHealth" load_steps=6 format=3 uid="uid://5yn4t13kwwoo"]
+[gd_resource type="Resource" script_class="CardBase" load_steps=10 format=3 uid="uid://boodcfdepyk5i"]
 
-[ext_resource type="Script" path="res://Cards/Card_DamageHealth.gd" id="1_ighm7"]
-[ext_resource type="Script" path="res://Cards/Effects/EffectDamageHealth.gd" id="1_tnci4"]
-[ext_resource type="Script" path="res://Cards/Effects/EffectData.gd" id="2_8c1ca"]
+[ext_resource type="Script" path="res://Cards/Effects/EffectDamageHealth.gd" id="1_v8nqe"]
+[ext_resource type="Script" path="res://Cards/Effects/EffectData.gd" id="2_v2ps8"]
+[ext_resource type="Script" path="res://Cards/Targeting/TargetingBase.gd" id="3_6aswi"]
+[ext_resource type="Script" path="res://Cards/CardBase.gd" id="3_bkc3b"]
+[ext_resource type="Script" path="res://Cards/EnergyData.gd" id="3_fnmvw"]
 
-[sub_resource type="Resource" id="Resource_uik3s"]
-script = ExtResource("1_tnci4")
+[sub_resource type="Resource" id="Resource_ssnwy"]
+script = ExtResource("1_v8nqe")
 
-[sub_resource type="Resource" id="Resource_dqy87"]
-script = ExtResource("2_8c1ca")
-effect = SubResource("Resource_uik3s")
+[sub_resource type="Resource" id="Resource_fdmh8"]
+script = ExtResource("3_6aswi")
+
+[sub_resource type="Resource" id="Resource_ggt87"]
+script = ExtResource("2_v2ps8")
+effect = SubResource("Resource_ssnwy")
 value = 0
+targeting_function = SubResource("Resource_fdmh8")
+
+[sub_resource type="Resource" id="Resource_noiey"]
+script = ExtResource("3_fnmvw")
+energy_cost = 1
 
 [resource]
-script = ExtResource("1_ighm7")
+script = ExtResource("3_bkc3b")
 application_type = 1
 card_title = "Damage Health"
-card_description = "Deal damage equal to health lost."
-card_effects_data = Array[ExtResource("2_8c1ca")]([SubResource("Resource_dqy87")])
+card_description = "Deals damage equal to health lost"
+card_effects_data = Array[ExtResource("2_v2ps8")]([SubResource("Resource_ggt87")])
+energy_info = SubResource("Resource_noiey")

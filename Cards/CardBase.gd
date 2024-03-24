@@ -13,12 +13,14 @@ class_name CardBase
 ## wish to take damage in some contexts.
 ## For example, consider the card: "Deal 10 damage to all enemies, but take 3 damage"
 
-@export var application_type: Enums.ApplicationType = Enums.ApplicationType.ENEMY_ONLY
+@export var application_type: GlobalEnums.ApplicationType = GlobalEnums.ApplicationType.ENEMY_ONLY
 @export var card_title: String = "NULL"
 @export var card_key_art: ImageTexture = null
 @export var card_description: String = "NULL"
 
 @export var card_effects_data: Array[EffectData] = []
+
+@export var energy_info: EnergyData = EnergyData.new()
 
 func _ready() -> void:
 	card_effects_data = []
@@ -31,16 +33,17 @@ func parse_card_data(card_data: Dictionary) -> void:
 	# TODO
 	pass
 
-func _apply_all_effects(target: Entity) -> void:
-	for effect_data: EffectData in card_effects_data:
-		effect_data.apply_effect_data(target)
-
 
 func can_play_card(caster: Entity, target: Entity) -> bool:
 	return caster.get_party_component().can_play_on_entity(application_type, target)
 
 
-func on_card_play(caster: Entity, target: Entity) -> void:
-	_apply_all_effects(target)
+func on_card_play(caster: Entity, base_target: Entity) -> void:
+	if caster is Player:
+		PlayerManager.player.get_energy_component().use_energy(self)	
+	
+	for effect_data: EffectData in card_effects_data:
+		var list_targets: Array[Entity] = effect_data.targeting_function.generate_target_list(base_target)
+		for current_target in list_targets:
+			effect_data.apply_effect_data(caster, current_target)
 	CardManager.on_card_action_finished.emit(self)
-	# TODO add other functionality that lots of cards may share (eg: restore AP)

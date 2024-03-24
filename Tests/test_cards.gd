@@ -1,37 +1,17 @@
-extends GutTest
+extends TestCardBase
 ## Tests for cards
 
 
-var _card_container_scene: PackedScene = load("res://Cards/CardContainer.tscn")
-var _card_container: CardContainer = null
-
-
-func before_each():
-	_card_container = _card_container_scene.instantiate()
-	
-	# fill deck with 50 default cards
-	_card_container.default_deck.resize(50)
-	_card_container.max_hand_size = 10
-	_card_container.starting_hand_size = 0
-	_card_container.card_draw_time = .05
-	
-	# assign cards names of Card1-Card50
-	for card_index: int in _card_container.default_deck.size():
-		_card_container.default_deck[card_index] = CardBase.new()
-		_card_container.default_deck[card_index].card_title = "Card" + str(card_index + 1)
-	
-	get_tree().root.add_child(_card_container)
+# @Override
+func before_each() -> void:
+	super()
 	
 	# set draw pile to default deck. This removes any randomness from shuffling on _ready()
 	# so each card will have a name Card1-Card50 in the draw pile
-	_card_container.draw_pile = _card_container.default_deck.duplicate()
+	_card_container.draw_pile = CardManager.current_deck.duplicate()
 
 
-func after_each():
-	_card_container.queue_free()
-
-
-func test_draw_cards():
+func test_draw_cards() -> void:
 	_card_container.draw_cards(5)
 	await _card_container.on_cards_finished_dealing
 	
@@ -40,7 +20,7 @@ func test_draw_cards():
 	assert_eq(_card_container.discard_pile.size(), 0)
 
 
-func test_draw_cards_2():
+func test_draw_cards_2() -> void:
 	_card_container.draw_cards(5)
 	_card_container.draw_cards(5)
 	await _card_container.on_cards_finished_dealing
@@ -50,7 +30,7 @@ func test_draw_cards_2():
 	assert_eq(_card_container.discard_pile.size(), 0)
 
 
-func test_discard_cards():
+func test_discard_cards() -> void:
 	_card_container.draw_cards(5)
 	await _card_container.on_cards_finished_dealing
 	_card_container.discard_random_card(1)
@@ -60,7 +40,7 @@ func test_discard_cards():
 	assert_eq(_card_container.discard_pile.size(), 1)
 
 
-func test_discard_cards_2():
+func test_discard_cards_2() -> void:
 	_card_container.draw_cards(5)
 	await _card_container.on_cards_finished_dealing
 	_card_container.discard_random_card(1)
@@ -70,7 +50,7 @@ func test_discard_cards_2():
 	assert_eq(_card_container.draw_pile.size(), 45)
 	assert_eq(_card_container.discard_pile.size(), 2)
 
-func test_discard_all():
+func test_discard_all() -> void:
 	_card_container.draw_cards(5)
 	await _card_container.on_cards_finished_dealing
 	_card_container.discard_all_cards()
@@ -80,7 +60,7 @@ func test_discard_all():
 	assert_eq(_card_container.discard_pile.size(), 5)
 
 
-func test_deal_starting_hand():
+func test_deal_starting_hand() -> void:
 	_card_container.starting_hand_size = 5
 	_card_container.deal_to_starting_hand_size()
 	await _card_container.on_cards_finished_dealing
@@ -90,7 +70,7 @@ func test_deal_starting_hand():
 	assert_eq(_card_container.discard_pile.size(), 0)
 
 
-func test_draw_to_max():
+func test_draw_to_max() -> void:
 	_card_container.draw_cards(50)
 	await _card_container.on_cards_finished_dealing
 	
@@ -99,7 +79,7 @@ func test_draw_to_max():
 	assert_eq(_card_container.discard_pile.size(), 0)
 
 
-func test_discard_specific():
+func test_discard_specific() -> void:
 	_card_container.draw_cards(5)
 	await _card_container.on_cards_finished_dealing
 	
@@ -117,3 +97,38 @@ func test_discard_specific():
 	assert_eq(_card_container.cards_in_hand.size(), 4)
 	assert_eq(_card_container.draw_pile.size(), 45)
 	assert_eq(_card_container.discard_pile.size(), 1)
+	
+func test_play_card_action_flow() -> void:
+	_card_container.draw_cards(10)
+	await _card_container.on_cards_finished_dealing
+
+	# Simulate queueing up a card
+	var _queued_card: CardWorld = _card_container.cards_in_hand[0]
+	_card_container.set_queued_card(_queued_card)
+
+	assert_eq(_card_container.cards_in_hand.size(), 10)
+	assert_true(_card_container.is_card_queued(), "Card has not been queued yet.")
+
+	# Simulate removing queued card to set it to active
+	_card_container.queued_for_active()
+
+	assert_eq(_card_container.cards_in_hand.size(), 9, "Card has not been removed from hand")
+	assert_eq(_card_container.discard_pile.size(), 0, "Discard pile has been populated too early")
+
+	# Simulate setting active card to play
+	_card_container.set_active_card(_queued_card)
+	
+	assert_true(_card_container.are_cards_active(), "No card is currently active")
+	
+	# Removed the queued card
+	_card_container.set_queued_card(null)
+	
+	assert_false(_card_container.is_card_queued(), "Card is still queued.")
+
+	# Simulate finishing the card action
+	_card_container.finish_active_card_action()
+
+	assert_eq(_card_container.cards_in_hand.size(), 9, "Card has not been removed from hand")
+	assert_false(_card_container.are_cards_active(), "Card is still currently active")
+	assert_eq(_card_container._cards_queued_for_discard.size(), 0, "Card has not been removed from discard queue")
+	assert_eq(_card_container.discard_pile.size(), 1, "Discard pile has not been populated yet")
